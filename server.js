@@ -1,6 +1,7 @@
 import express from "express";
 import bodyParser from "body-parser";
 import dotenv from "dotenv";
+import cors from "cors";
 import fs from "fs";
 import csv from "csv-parser";
 import { initQdrant, addDocument, search } from "./qdrant.js";
@@ -9,6 +10,9 @@ import { getEmbedding, generateResponse } from "./gemini.js";
 dotenv.config();
 
 const app = express();
+
+// Enable CORS for all origins, no credentials
+app.use(cors({ origin: "*", credentials: false }));
 app.use(bodyParser.json());
 
 // Configurable constants
@@ -22,10 +26,11 @@ async function initialize() {
     console.log("✅ Qdrant initialized");
   } catch (error) {
     console.error("❌ Failed to initialize Qdrant:", error.message);
-    process.exit(1); 
+    process.exit(1);
   }
 }
 
+// Load CSV into Qdrant
 async function loadCSV() {
   try {
     const results = [];
@@ -50,7 +55,7 @@ async function loadCSV() {
         row.faq_payment?.trim(),
         row.faq_returns?.trim(),
       ]
-        .filter(Boolean) 
+        .filter(Boolean)
         .join("\n\n");
 
       if (!text || text.trim() === "") {
@@ -74,6 +79,7 @@ async function loadCSV() {
   }
 }
 
+// Initialize and load data
 async function start() {
   await initialize();
   await loadCSV();
@@ -84,6 +90,7 @@ start().catch((error) => {
   process.exit(1);
 });
 
+// Ask question endpoint
 app.post("/ask", async (req, res) => {
   try {
     const { question } = req.body;
