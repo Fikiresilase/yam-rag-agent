@@ -11,7 +11,6 @@ dotenv.config();
 
 const app = express();
 
-// Enable CORS for all origins, no credentials
 app.use(cors({
     origin: "http://localhost:5173",
     credentials: true,
@@ -21,11 +20,9 @@ app.use(cors({
 }));
 app.use(bodyParser.json());
 
-// Configurable constants
 const CSV_FILE = process.env.CSV_FILE || "yam-resource.csv";
 const PORT = process.env.PORT || 3000;
 
-// Initialize Qdrant
 async function initialize() {
   try {
     await initQdrant();
@@ -36,7 +33,6 @@ async function initialize() {
   }
 }
 
-// Load CSV into Qdrant
 async function loadCSV() {
   try {
     const results = [];
@@ -85,7 +81,6 @@ async function loadCSV() {
   }
 }
 
-// Initialize and load data
 async function start() {
   await initialize();
   await loadCSV();
@@ -96,7 +91,6 @@ start().catch((error) => {
   process.exit(1);
 });
 
-// Ask question endpoint
 app.post("/ask", async (req, res) => {
   try {
     const { question } = req.body;
@@ -131,7 +125,6 @@ ${question.trim()}`;
   }
 });
 
-// Start server
 app.listen(PORT, () =>
   console.log(`🚀 RAG server running on http://localhost:${PORT}`)
 );

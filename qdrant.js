@@ -3,13 +3,11 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Initialize Qdrant client for Cloud
 const qdrant = new QdrantClient({
   url: process.env.QDRANT_URL,
   apiKey: process.env.QDRANT_API_KEY,
 });
 
-// Initialize collection
 export async function initQdrant() {
   try {
     await qdrant.recreateCollection("docs", {
@@ -21,7 +19,6 @@ export async function initQdrant() {
   }
 }
 
-// Add document with embedding
 export async function addDocument(id, text, embedding) {
   try {
     await qdrant.upsert("docs", {
@@ -32,7 +29,6 @@ export async function addDocument(id, text, embedding) {
   }
 }
 
-// Search nearest documents
 export async function search(queryEmbedding, limit = 3) {
   try {
     const result = await qdrant.search("docs", {
