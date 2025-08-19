@@ -12,7 +12,7 @@ dotenv.config();
 const app = express();
 
 // Enable CORS for all origins, no credentials
-app.use(cors({ origin: "*", credentials: false }));
+app.use(cors({ origin: "http://localhost:5173", credentials: false }));
 app.use(bodyParser.json());
 
 // Configurable constants
