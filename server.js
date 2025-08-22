@@ -5,7 +5,7 @@ import cors from "cors";
 import fs from "fs";
 import csv from "csv-parser";
 import { initQdrant, addDocument, search } from "./qdrant.js";
-import { getEmbedding, generateResponse } from "./gemini.js";
+import { getEmbedding, generateResponse, queryDatabase } from "./gemini.js";
 
 dotenv.config();
 
@@ -15,10 +15,10 @@ const app = express();
 const chatHistory = new Map();
 
 app.use(cors({
-    origin: "http://localhost:5173",
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+  origin: "http://localhost:5173",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],  
 }));
 app.use(bodyParser.json());
 
@@ -26,6 +26,7 @@ const CSV_FILE = process.env.CSV_FILE || "yam-resource.csv";
 const PORT = process.env.PORT || 3000;
 const BATCH_SIZE = parseInt(process.env.BATCH_SIZE, 10) || 10;
 const MAX_HISTORY = 5; // Limit to last 5 interactions per user
+const MCP_SERVER_PATH = process.env.MCP_SERVER_PATH || "./mcp-toolbox/server.js";
 
 async function initialize() {
   try {
@@ -83,7 +84,7 @@ async function loadCSV() {
           await addDocument(rowIndex, { location_name: row.location_name, text }, embedding);
           console.log(`✅ Added document ${rowIndex}: ${row.location_name} - ${text.substring(0, 50)}...`);
         } catch (error) {
-          console.error(`❌ Error processing row ${rowIndex} (${row.location_name}):`, error.message);
+          console.error(`❌ Error processing row ${rowIndex} (${row.location_name}):`, error);
         }
       });
 
@@ -119,22 +120,38 @@ app.post("/ask", async (req, res) => {
       return res.status(400).json({ error: "User ID must be a non-empty string" });
     }
 
-    const queryEmbedding = await getEmbedding(question.trim());
-    const docs = await search(queryEmbedding);
-
-    const context = Array.isArray(docs)
-      ? docs
-          .map((doc) => `Location: ${doc.location_name}\n${doc.text}`)
-          .join("\n\n")
-      : "No relevant documents found";
-
     // Retrieve user's chat history
     const userHistory = chatHistory.get(userId) || [];
     const historyContext = userHistory
       .map((entry, index) => `Previous Q${index + 1}: ${entry.question}\nPrevious A${index + 1}: ${entry.answer}`)
       .join("\n\n");
 
-    const finalPrompt = `You are Yam Cheff, a friendly and enthusiastic chef from Yamfoods, passionate about baking with love and sharing culinary knowledge. Answer the question in a warm, engaging tone, as if you're chatting with food lovers in Addis Ababa. Use the provided context and the user's previous conversation history to provide accurate, relevant, and delightful responses.use amharic by ddefault unless a user insists otherwise. Keep your response concise yet engaging. Let's get cooking!
+    // Determine if the prompt requires database access
+    const isDatabaseQuery = question.toLowerCase().includes("database") || question.toLowerCase().includes("query");
+
+    let answer, context = "";
+
+    if (isDatabaseQuery) {
+      // Use MCP for database queries
+      try {
+        answer = await queryDatabase(question.trim(), MCP_SERVER_PATH);
+        context = "Database query executed via MCP";
+      } catch (error) {
+        console.error("❌ Error querying database:", error.message);
+        return res.status(500).json({ error: "Failed to query database" });
+      }
+    } else {
+      // Use Qdrant for context retrieval
+      const queryEmbedding = await getEmbedding(question.trim());
+      const docs = await search(queryEmbedding);
+
+      context = Array.isArray(docs)
+        ? docs
+            .map((doc) => `Location: ${doc.location_name}\n${doc.text}`)
+            .join("\n\n")
+        : "No relevant documents found";
+
+      const finalPrompt = `You are Yam Cheff, a friendly and enthusiastic chef from Yamfoods, passionate about baking with love and sharing culinary knowledge. Answer the question in a warm, engaging tone, as if you're chatting with food lovers in Addis Ababa. Use the provided context and the user's previous conversation history to provide accurate, relevant, and delightful responses. Use Amharic by default unless a user insists otherwise. Keep your response concise yet engaging. Let's get cooking!
 
 Conversation History:
 ${historyContext || "No previous conversation history"}
@@ -145,7 +162,8 @@ ${context}
 Question:
 ${question.trim()}`;
 
-    const answer = await generateResponse(finalPrompt);
+      answer = await generateResponse(finalPrompt);
+    }
 
     // Update chat history
     userHistory.push({ question: question.trim(), answer });
