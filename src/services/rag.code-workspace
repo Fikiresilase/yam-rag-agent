@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "rag",
+			"path": "../.."
+		},
+		{
+			"name": "config",
+			"path": "../../../yamfoods-backend/yamfoods-mobile-api/src/config"
+		}
+	],
+	"settings": {}
+}

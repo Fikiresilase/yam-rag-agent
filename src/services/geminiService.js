@@ -51,7 +51,7 @@ export async function getEmbedding(text, retries = 3) {
   }
 }
 
-const mcpServerPathDefault = path.resolve(process.cwd(), "mcp-toolbox/server.js");
+const mcpServerPathDefault = path.resolve(process.cwd(), "./mcp-toolbox/server.js");
 
 export async function generateResponse(prompt, useMCP = false, mcpServerPath = mcpServerPathDefault) {
   try {
@@ -74,7 +74,7 @@ export async function generateResponse(prompt, useMCP = false, mcpServerPath = m
 
       try {
         console.log("Requesting tools list from MCP server...");
-        const toolsResponse = await client.request({ method: "tools/list" }, z.any(), { timeout: 120000 }); // 120s timeout
+        const toolsResponse = await client.request({ method: "tools/list" }, z.any(), { timeout: 30000 }); // 30s timeout
         if (!toolsResponse.tools || toolsResponse.tools.length === 0) {
           throw new Error("No tools available from MCP server");
         }
@@ -82,7 +82,7 @@ export async function generateResponse(prompt, useMCP = false, mcpServerPath = m
         const availableTools = toolsResponse.tools.map((tool) => ({
           name: tool.name,
           description: tool.description,
-          input_schema: tool.inputSchema,
+          parameters: tool.inputSchema,
         }));
         console.log("Available tools:", availableTools);
 
@@ -102,7 +102,7 @@ export async function generateResponse(prompt, useMCP = false, mcpServerPath = m
         if (content.parts[0].functionCall) {
           const { name, args } = content.parts[0].functionCall;
           console.log(`Calling tool: ${name} with args:`, args);
-          const toolResponse = await client.callTool(name, args, { timeout: 120000 }); // 120s timeout
+          const toolResponse = await client.callTool(name, args, { timeout: 30000 }); // 30s timeout
           const functionResponse = { name, response: toolResponse };
 
           const finalResult = await model.generateContent({
@@ -118,6 +118,11 @@ export async function generateResponse(prompt, useMCP = false, mcpServerPath = m
         return content.parts[0].text;
       } finally {
         console.log("Cleaning up MCP client connection");
+        try {
+          await client.close();
+        } catch (closeError) {
+          console.warn("Warning: Error closing MCP client:", closeError.message);
+        }
       }
     } else {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -146,7 +151,7 @@ export async function queryDatabase(prompt, mcpServerPath = mcpServerPathDefault
       name: "yamfoods-client",
       version: "1.0.0",
     },
-     { capablities: {
+     { capabilities: {
         sampling:{}
      }
      }
@@ -161,10 +166,15 @@ export async function queryDatabase(prompt, mcpServerPath = mcpServerPathDefault
 
     try {
       console.log(`Calling query_database tool with SQL: ${prompt}`);
-      const result = await client.callTool("query_database", { sql: prompt }, { timeout: 120000 }); // 120s timeout
+      const result = await client.callTool("query_database", { sql: prompt }, { timeout: 30000 }); // 30s timeout
       return result.content[0].text;
     } finally {
       console.log("Cleaning up MCP client connection");
+      try {
+        await client.close();
+      } catch (closeError) {
+        console.warn("Warning: Error closing MCP client:", closeError.message);
+      }
     }
   } catch (error) {
     console.error("Error querying database:", error);
